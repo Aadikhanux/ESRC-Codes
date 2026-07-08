@@ -1,0 +1,234 @@
+# FLF CODE 
+/*
+=========================================================
+IRONPULSE FAST PID LINE FOLLOWER
+Arduino UNO + L298N + 5 Digital TCRT5000
+=========================================================
+*/
+
+//---------------- SENSOR PINS ----------------
+
+#define S1 A0
+#define S2 A1
+#define S3 A2
+#define S4 A3
+#define S5 A4
+
+#define LINE_DETECTED LOW
+
+//---------------- L298N PINS ----------------
+
+#define ENA 5
+#define ENB 6
+
+#define IN1 8
+#define IN2 9
+#define IN3 10
+#define IN4 11
+
+//---------------- SPEED ----------------
+
+int baseSpeed = 120;
+int maxSpeed = 255;
+
+//---------------- PID ----------------
+
+float Kp = 22.0;
+float Ki = 0.00;
+float Kd = 2.0;
+
+int lastError = 0;
+float integral = 0;
+
+const float INTEGRAL_LIMIT = 40;
+
+//---------------- LINE LOST ----------------
+
+int lostCount = 0;
+const int LOST_THRESHOLD = 20;
+
+void setup()
+{
+  pinMode(S1,INPUT);
+  pinMode(S2,INPUT);
+  pinMode(S3,INPUT);
+  pinMode(S4,INPUT);
+  pinMode(S5,INPUT);
+
+  pinMode(ENA,OUTPUT);
+  pinMode(ENB,OUTPUT);
+
+  pinMode(IN1,OUTPUT);
+  pinMode(IN2,OUTPUT);
+  pinMode(IN3,OUTPUT);
+  pinMode(IN4,OUTPUT);
+
+  analogWrite(ENA,0);
+  analogWrite(ENB,0);
+
+  Serial.begin(9600);
+}
+//=====================================================
+// READ SENSOR VALUES
+//=====================================================
+void readSensors(int sensor[])
+{
+  sensor[0] = (digitalRead(S1) == LINE_DETECTED);
+  sensor[1] = (digitalRead(S2) == LINE_DETECTED);
+  sensor[2] = (digitalRead(S3) == LINE_DETECTED);
+  sensor[3] = (digitalRead(S4) == LINE_DETECTED);
+  sensor[4] = (digitalRead(S5) == LINE_DETECTED);
+}
+
+//=====================================================
+// CALCULATE ERROR
+//=====================================================
+int getError(bool &lineFound)
+{
+  int sensor[5];
+  readSensors(sensor);
+
+  int weight[5] = {-4, -2, 0, 2, 4};
+
+  int active = 0;
+  long weightedSum = 0;
+
+  for(int i = 0; i < 5; i++)
+  {
+    if(sensor[i])
+    {
+      active++;
+      weightedSum += weight[i];
+    }
+  }
+
+  // No line detected
+  if(active == 0)
+  {
+    lineFound = false;
+
+    if(lastError > 0)
+      return 8;
+    else
+      return -8;
+  }
+
+  lineFound = true;
+
+  // All sensors detect line
+  if(active == 5)
+    return 0;
+
+  // Weighted average ×10 for better PID resolution
+  return (weightedSum * 10) / active;
+}
+//=====================================================
+// MOTOR CONTROL
+//=====================================================
+void driveMotors(int leftSpeed, int rightSpeed)
+{
+  leftSpeed = constrain(leftSpeed, 0, maxSpeed);
+  rightSpeed = constrain(rightSpeed, 0, maxSpeed);
+
+  // LEFT MOTOR FORWARD
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  // RIGHT MOTOR FORWARD
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+
+  analogWrite(ENA, leftSpeed);
+  analogWrite(ENB, rightSpeed);
+}
+
+//=====================================================
+// PID CONTROLLER
+//=====================================================
+void PIDControl()
+{
+  bool lineFound;
+  int error = getError(lineFound);
+
+  //------------- Line Lost -------------
+  if(!lineFound)
+    lostCount++;
+  else
+    lostCount = 0;
+
+  //------------- Sharp Turn Recovery -------------
+  if(lostCount > LOST_THRESHOLD)
+  {
+    if(lastError > 0)
+    {
+      // Turn Right
+      driveMotors(baseSpeed, 40);
+    }
+    else
+    {
+      // Turn Left
+      driveMotors(40, baseSpeed);
+    }
+    return;
+  }
+
+  //------------- PID -------------------
+  integral += error;
+
+  integral = constrain(integral,
+                       -INTEGRAL_LIMIT,
+                        INTEGRAL_LIMIT);
+
+  float derivative = error - lastError;
+
+  float correction =
+      (Kp * error) +
+      (Ki * integral) +
+      (Kd * derivative);
+
+  lastError = error;
+
+  int leftSpeed = baseSpeed + correction;
+  int rightSpeed = baseSpeed - correction;
+
+  leftSpeed = constrain(leftSpeed, 0, maxSpeed);
+  rightSpeed = constrain(rightSpeed, 0, maxSpeed);
+
+  driveMotors(leftSpeed, rightSpeed);
+}
+//=====================================================
+// MAIN LOOP
+//=====================================================
+void loop()
+{
+  PIDControl();
+
+  /*
+  // ---------- DEBUG ----------
+  bool lineFound;
+  int error = getError(lineFound);
+
+  Serial.print("Error : ");
+  Serial.print(error);
+
+  Serial.print("   Lost : ");
+  Serial.print(lostCount);
+
+  Serial.print("   Integral : ");
+  Serial.print(integral);
+
+  Serial.print("   Sensors : ");
+
+  Serial.print(digitalRead(S1));
+  Serial.print(" ");
+  Serial.print(digitalRead(S2));
+  Serial.print(" ");
+  Serial.print(digitalRead(S3));
+  Serial.print(" ");
+  Serial.print(digitalRead(S4));
+  Serial.print(" ");
+  Serial.println(digitalRead(S5));
+  */
+
+  delay(2);
+}
