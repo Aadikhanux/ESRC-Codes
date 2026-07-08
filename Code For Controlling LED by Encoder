@@ -1,0 +1,147 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Encoder.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Encoder Pins
+#define CLK 2
+#define DT 3
+#define SW 4
+
+// LED
+#define LED_PIN 8
+
+Encoder knob(CLK, DT);
+
+long oldPosition = -999;
+
+int menuIndex = 0;
+const int totalItems = 3;
+
+String menu[] =
+{
+  "LED ON",
+  "LED OFF",
+  "ABOUT"
+};
+
+void drawMenu()
+{
+  display.clearDisplay();
+
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+
+  display.setCursor(25,0);
+  display.println("MAIN MENU");
+
+  display.drawLine(0,10,127,10,SSD1306_WHITE);
+
+  for(int i=0;i<totalItems;i++)
+  {
+    display.setCursor(10,18+i*14);
+
+    if(i==menuIndex)
+      display.print("> ");
+    else
+      display.print("  ");
+
+    display.println(menu[i]);
+  }
+
+  display.display();
+}
+
+void executeMenu()
+{
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+
+  switch(menuIndex)
+  {
+    case 0:
+      digitalWrite(LED_PIN,HIGH);
+      display.setTextSize(2);
+      display.setCursor(10,20);
+      display.println("LED ON");
+      break;
+
+    case 1:
+      digitalWrite(LED_PIN,LOW);
+      display.setTextSize(2);
+      display.setCursor(5,20);
+      display.println("LED OFF");
+      break;
+
+    case 2:
+      display.setTextSize(1);
+      display.setCursor(18,20);
+      display.println("OLED MENU DEMO");
+      display.setCursor(35,40);
+      display.println("By Aadi");
+      break;
+  }
+
+  display.display();
+
+  delay(1200);
+
+  drawMenu();
+}
+
+void setup()
+{
+  pinMode(SW,INPUT_PULLUP);
+
+  pinMode(LED_PIN,OUTPUT);
+  digitalWrite(LED_PIN,LOW);
+
+  if(!display.begin(SSD1306_SWITCHCAPVCC,0x3C))
+  {
+    while(1);
+  }
+
+  drawMenu();
+}
+
+void loop()
+{
+  long newPosition = knob.read()/4;
+
+  if(newPosition != oldPosition)
+  {
+    if(newPosition > oldPosition)
+      menuIndex++;
+    else
+      menuIndex--;
+
+    if(menuIndex >= totalItems)
+      menuIndex = 0;
+
+    if(menuIndex < 0)
+      menuIndex = totalItems-1;
+
+    oldPosition = newPosition;
+
+    drawMenu();
+
+    delay(50);
+  }
+
+  if(digitalRead(SW)==LOW)
+  {
+    delay(150);
+
+    executeMenu();
+
+    while(digitalRead(SW)==LOW);
+
+    delay(100);
+  }
+}
