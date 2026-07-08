@@ -1,0 +1,124 @@
+#code for speed measurement liquid crystal display on arduino
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// Try 0x27 if 0x3F doesn't work
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+const int sensor1 = 2;
+const int sensor2 = 3;
+
+unsigned long startTime = 0;
+unsigned long endTime = 0;
+
+bool sensor1Triggered = false;
+
+const float distance = 0.20;   // 20 cm = 0.20 m
+
+void setup()
+{
+  pinMode(sensor1, INPUT_PULLUP);
+  pinMode(sensor2, INPUT_PULLUP);
+
+  Serial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+
+  lcd.setCursor(0, 0);
+  lcd.print("Speed Meter");
+  lcd.setCursor(0, 1);
+  lcd.print("Starting...");
+
+  Serial.println("System Started");
+
+  delay(2000);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Ready...");
+}
+
+void loop()
+{
+  int s1 = digitalRead(sensor1);
+  int s2 = digitalRead(sensor2);
+
+  Serial.print("S1: ");
+  Serial.print(s1);
+  Serial.print("  S2: ");
+  Serial.println(s2);
+
+  // Sensor 1 triggered
+  if (s1 == LOW && !sensor1Triggered)
+  {
+    startTime = millis();
+    sensor1Triggered = true;
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Object Detected");
+    lcd.setCursor(0, 1);
+    lcd.print("Timing...");
+    
+    Serial.println("Sensor 1 Triggered");
+    delay(200);
+  }
+
+  // Sensor 2 triggered
+  if (sensor1Triggered && s2 == LOW)
+  {
+    endTime = millis();
+
+    float timeTaken = (endTime - startTime) / 1000.0;
+
+    if (timeTaken > 0)
+    {
+      float speed = distance / timeTaken;
+
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Speed:");
+      lcd.print(speed, 2);
+      lcd.print("m/s");
+
+      lcd.setCursor(0, 1);
+
+      if (speed < 0.5)
+        lcd.print("Class: SLOW");
+      else if (speed < 1.5)
+        lcd.print("Class: MEDIUM");
+      else
+        lcd.print("Class: FAST");
+
+      Serial.print("Time = ");
+      Serial.print(timeTaken);
+      Serial.println(" s");
+
+      Serial.print("Speed = ");
+      Serial.print(speed);
+      Serial.println(" m/s");
+    }
+
+    delay(3000);
+
+    sensor1Triggered = false;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Ready...");
+  }
+
+  // Reset if sensor2 not triggered in 5 sec
+  if (sensor1Triggered && (millis() - startTime > 5000))
+  {
+    sensor1Triggered = false;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Timeout Reset");
+    delay(1000);
+    lcd.clear();
+    lcd.print("Ready...");
+  }
+
+  delay(50);
+}
