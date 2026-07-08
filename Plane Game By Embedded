@@ -1,0 +1,96 @@
+// --- code for aeroplane project ---
+// --- Pin Definitions ---
+const int joyX = A0;   // Joystick Left/Right -> Controls Aileron Roll Vector
+const int joyY = A1;   // Joystick Up/Down -> Controls Elevator Pitch Axis
+const int potPin = A2; // Rotary Potentiometer Knob -> Controls Engine Thrust/Throttle
+
+const int redLED = 3;   // Alert Status: Ground Roll / Unsafe Low Altitude ('R') / Crash ('C')
+const int greenLED = 5; // Alert Status: Ideal Safe Flight Corridor ('G')
+const int blueLED = 6;  // Alert Status: Approaching Maximum Structural Altitude Ceiling ('B')
+const int buzzer = 8;   // Warning System: Proximity Master Caution Alert ('W') / Crash Alarm ('C')
+
+bool internalSystemCrashState = false;
+
+void setup() {
+  // Establish high-speed, stable serial connection for real-time telemetry stream
+  Serial.begin(9600);
+
+  pinMode(redLED, OUTPUT);
+  pinMode(greenLED, OUTPUT);
+  pinMode(blueLED, OUTPUT);
+  pinMode(buzzer, OUTPUT);
+
+  // Quick hardware self-test diagnostic at power-on sequence
+  digitalWrite(redLED, HIGH);
+  digitalWrite(greenLED, HIGH);
+  digitalWrite(blueLED, HIGH);
+  delay(250);
+  digitalWrite(redLED, LOW);
+  digitalWrite(greenLED, LOW);
+  digitalWrite(blueLED, LOW);
+}
+
+void loop() {
+  // 1. Read instantaneous analog voltages from physical control deck inputs
+  int rollValue = analogRead(joyX);
+  int pitchValue = analogRead(joyY);
+  int throttleValue = analogRead(potPin);
+
+  // 2. Stream comma-separated variables data packet downstream to Processing
+  Serial.print(rollValue);
+  Serial.print(",");
+  Serial.print(pitchValue);
+  Serial.print(",");
+  Serial.println(throttleValue);
+
+  // 3. Parse incoming telemetry packets received back from the host simulator
+  if (Serial.available()) {
+    char signalIn = Serial.read();
+
+    // Prevent flight profile updates if a critical structural collapse has been triggered
+    if (!internalSystemCrashState) {
+      switch (signalIn) {
+        
+        // --- Altitude LED Management Cases ---
+        case 'R': // Ground Roll configuration or dangerously low altitude profile
+          digitalWrite(redLED, HIGH);
+          digitalWrite(greenLED, LOW);
+          digitalWrite(blueLED, LOW);
+          break;
+          
+        case 'G': // Ideal flight cruise corridor tracking profile
+          digitalWrite(redLED, LOW);
+          digitalWrite(greenLED, HIGH);
+          digitalWrite(blueLED, LOW);
+          break;
+          
+        case 'B': // Structural safety ceiling limit boundary reached
+          digitalWrite(redLED, LOW);
+          digitalWrite(greenLED, LOW);
+          digitalWrite(blueLED, HIGH);
+          break;
+
+        // --- Proximity Master Caution Buzzer Management Cases ---
+        case 'W': // Immediate terrain hazard alert proximity zone active
+          tone(buzzer, 1400); // Piercing high-pitch aviation master caution sound
+          break;
+          
+        case 'S': // Proximity hazards safely cleared, silence buzzer
+          noTone(buzzer);
+          break;
+
+        // --- Critical Hull Failure / Collision Impact Case ---
+        case 'C': 
+          internalSystemCrashState = true;
+          digitalWrite(redLED, HIGH);
+          digitalWrite(greenLED, LOW);
+          digitalWrite(blueLED, LOW);
+          tone(buzzer, 95); // Constant, heavy structural failure alert drone sound
+          break;
+      }
+    }
+  }
+
+  // Consistent 50Hz scheduling frame interval execution window to perfectly sync with Processing loop
+  delay(20); 
+}
