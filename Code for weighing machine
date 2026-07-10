@@ -1,0 +1,52 @@
+#include <HX711.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+#define DOUT 3
+#define CLK 2
+
+HX711 scale;
+
+// Most I2C LCDs use address 0x27
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void setup() {
+
+  Serial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+
+  lcd.setCursor(0,0);
+  lcd.print("Digital Scale");
+
+  scale.begin(DOUT, CLK);
+
+  delay(3000);
+
+  scale.tare();               // Zero the scale
+  scale.set_scale(160.0);     // Change after calibration
+
+  lcd.clear();
+}
+
+void loop() {
+
+  float weight = scale.get_units(10);
+
+  if(weight < 0)
+    weight = 0;
+
+  lcd.setCursor(0,0);
+  lcd.print("Weight:");
+
+  lcd.setCursor(0,1);
+  lcd.print(weight,2);
+  lcd.print(" g     ");
+
+  Serial.print("Weight: ");
+  Serial.print(weight,2);
+  Serial.println(" g");
+
+  delay(300);
+}
